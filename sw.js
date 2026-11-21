@@ -1,6 +1,6 @@
 // Service worker: guarda a app no telemóvel para abrir sem rede.
 // Ao publicar uma versão nova, muda o número abaixo.
-const VERSAO = 'contas-v1.0.1';
+const VERSAO = 'contas-v1.0.2';
 const BASE = ['./', './index.html', './app.js', './firebase.js', './config.js', './manifest.webmanifest',
   './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png'];
 
@@ -22,7 +22,7 @@ self.addEventListener('fetch', e => {
   if (!proprio && !fontes) return; // Firebase (Firestore/Auth) vai sempre direto à rede
   // Rede primeiro para ficheiros da app (apanha versões novas); cache quando não há rede.
   e.respondWith(
-    fetch(req).then(res => {
+    (proprio ? fetch(req.url, { cache: 'no-cache', credentials: 'same-origin' }) : fetch(req)).then(res => {
       if (res && (res.ok || res.type === 'opaque')) {
         const copia = res.clone();
         caches.open(VERSAO).then(c => c.put(req, copia));
