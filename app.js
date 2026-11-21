@@ -1,6 +1,6 @@
-import {initializeApp,getAuth,signInWithEmailAndPassword,onAuthStateChanged,signOut,updatePassword,sendPasswordResetEmail,initializeFirestore,persistentLocalCache,persistentMultipleTabManager,collection,doc,setDoc,deleteDoc,onSnapshot,query,where} from './firebase.js';
+import {initializeApp,getAuth,signInWithEmailAndPassword,onAuthStateChanged,signOut,updatePassword,sendPasswordResetEmail,initializeFirestore,persistentLocalCache,persistentMultipleTabManager,collection,doc,setDoc,getDoc,deleteDoc,onSnapshot,query,where} from './firebase.js';
 import {firebaseConfig} from './config.js';
-const VERSAO='1.0.2';
+const VERSAO='1.1.0';
 const $=s=>document.querySelector(s);
 const eur=new Intl.NumberFormat('pt-PT',{style:'currency',currency:'EUR'});
 const E=v=>eur.format(v||0);
@@ -94,7 +94,7 @@ function acerto(L){
 
 /* ---------- vistas ---------- */
 const bdg=c=>`<span class="bdg" style="background:${c.c}">${esc(c.n.replace(/[^A-Za-zÀ-ú ]/g,'').split(' ').filter(w=>w.length>2).map(w=>w[0]).join('').slice(0,2).toUpperCase()||c.n[0])}</span>`;
-function itemH(x){const c=catO(x.cat);return`<button class="it" data-act="edit" data-id="${esc(x.id)}">${bdg(c)}<span class="mid"><b>${esc(x.nota||x.sub||c.n)}</b><small>${esc(c.n)}${x.sub&&x.nota?' · '+esc(x.sub):''} · ${esc(nome(x.pag))}${x.fixo?' · fixo':''}</small></span><span class="v ${x.tipo==='r'?'r':''}">${x.tipo==='r'?'+':'−'}${E(x.valor)}</span></button>`}
+function itemH(x){const c=catO(x.cat);return`<button class="it" data-act="edit" data-id="${esc(x.id)}">${bdg(c)}<span class="mid"><b>${esc(x.nota||x.sub||c.n)}</b><small>${esc(c.n)}${x.sub&&x.nota?' · '+esc(x.sub):''} · ${esc(nome(x.pag))}${x.fixo?' · fixo':''}${x.talao?' · talão':''}</small></span><span class="v ${x.tipo==='r'?'r':''}">${x.tipo==='r'?'+':'−'}${E(x.valor)}</span></button>`}
 
 function vResumo(){
  const m=st.mes,t=totais(m),prev=totais(addMes(m,-1)),sobra=t.R-t.D-t.P,pend=pendentes(m),cats=porCat(t.L),orc=(st.orc&&st.orc.cats)||{};
@@ -213,6 +213,83 @@ function vMais(){
  return h;
 }
 
+/* ---------- talões (foto + leitura automática) ---------- */
+const LOJAS=[
+ [/continente|modelo\s*bonjour/i,'Continente','alim','Supermercado'],[/pingo\s*doce/i,'Pingo Doce','alim','Supermercado'],[/\blidl\b/i,'Lidl','alim','Supermercado'],
+ [/\baldi\b/i,'Aldi','alim','Supermercado'],[/intermarch/i,'Intermarché','alim','Supermercado'],[/minipre[cç]o|\bdia\s*%/i,'Minipreço','alim','Supermercado'],
+ [/auchan|jumbo/i,'Auchan','alim','Supermercado'],[/mercadona/i,'Mercadona','alim','Supermercado'],[/meu\s*super/i,'Meu Super','alim','Supermercado'],
+ [/coviran|spar\b|amanhecer/i,'Mercearia','alim','Supermercado'],[/el\s*corte\s*ingl/i,'El Corte Inglés','alim','Supermercado'],
+ [/\bgalp\b/i,'Galp','trans','Combustível'],[/\bbp\b|bp\s*portugal/i,'BP','trans','Combustível'],[/repsol/i,'Repsol','trans','Combustível'],
+ [/cepsa|moeve/i,'Cepsa','trans','Combustível'],[/\bprio\b/i,'Prio','trans','Combustível'],[/\bshell\b/i,'Shell','trans','Combustível'],
+ [/farm[aá]cia|wells/i,'Farmácia','saude','Farmácia'],
+ [/mc\s*donald|burger\s*king|telepizza|pizza\s*hut|\bkfc\b|\bh3\b|starbucks|vitaminas|domino/i,'Restaurante','alim','Restaurantes'],
+ [/pastelaria|padaria|confeitaria/i,'Pastelaria','alim','Café e snacks'],
+ [/\bikea\b/i,'IKEA','casa','Mobiliário e decoração'],[/leroy\s*merlin|\baki\b|bricomarch|maxmat|bricodepot/i,'Bricolage','casa','Manutenção e obras'],
+ [/worten|fnac|radio\s*popular/i,'Eletrónica','casa','Eletrodomésticos'],
+ [/zippy|toys\s*r|imaginarium|prenatal|chicco/i,'Loja de criança','cri','Roupa e calçado'],
+ [/primark|\bzara\b|h\s*&\s*m|pull\s*&|bershka|mango|c\s*&\s*a|kiabi/i,'Roupa','vest','Roupa'],[/decathlon/i,'Decathlon','lazer','Hobbies'],
+ [/via\s*verde|brisa|ascendi/i,'Portagens','trans','Portagens e Via Verde'],[/\bcp\b|comboios|metro|stcp|carris/i,'Transportes','trans','Transportes públicos']
+];
+function valoresDe(s){return[...s.replace(/(\d)\s+([,.]\d{2}\b)/g,'$1$2').matchAll(/(\d{1,4}(?:[ .]\d{3})*)[,.](\d{2})(?!\d)/g)].map(x=>parseFloat(x[1].replace(/[ .]/g,'')+'.'+x[2])).filter(v=>v>0&&v<20000)}
+function lerTexto(text){
+ const L=text.split('\n').map(s=>s.trim()).filter(Boolean);
+ const mau=/sub\s*-?total|iva|base|taxa|desc|poup|troco|entregue|recebid|saldo|cart[aã]o\s*(de\s*)?cliente|pontos|acumul|artigos|itens|qtd/i;
+ let total=null,certeza=true;
+ for(const re of[/total\s*a\s*pagar|a\s*pagar|total\s*eur|total\s*\(?€|\btotal\b/i,/valor\s*pago|montante|multibanco|\bmb\b|visa|mastercard|numer[aá]rio|dinheiro|pagamento/i]){
+  for(let i=0;i<L.length&&total==null;i++){const l=L[i];if(re.test(l)&&!mau.test(l)){let v=valoresDe(l);if(!v.length&&L[i+1])v=valoresDe(L[i+1]);if(v.length)total=v[v.length-1]}}
+  if(total!=null)break;
+ }
+ if(total==null){const todos=L.flatMap(l=>mau.test(l)?[]:valoresDe(l));if(todos.length){total=Math.max(...todos);certeza=false}}
+ let data=null;const hojeD=new Date();
+ for(const l of L){let m=l.match(/\b(20\d{2})[-\/.](\d{1,2})[-\/.](\d{1,2})\b/),y,mo,d;
+  if(m){y=+m[1];mo=+m[2];d=+m[3]}else{m=l.match(/\b(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{2,4})\b/);if(m){d=+m[1];mo=+m[2];y=+m[3];if(y<100)y+=2000}}
+  if(m&&mo>=1&&mo<=12&&d>=1&&d<=31){const dt=new Date(y,mo-1,d);const dias=(hojeD-dt)/864e5;if(dias>-1&&dias<400){data=y+'-'+pad(mo)+'-'+pad(d);break}}}
+ let loja=null;const topo=L.slice(0,12).join(' ')+' '+L.join(' ');
+ for(const[re,n,c,s]of LOJAS)if(re.test(topo)){loja={n,c,s};break}
+ return{total,certeza,data,loja};
+}
+let ocrP=null;
+function setOcr(msg){if(!F)return;F.ocrMsg=msg;const e=$('#ocr-st');if(e)e.textContent=msg}
+function carregarScript(src){return new Promise((ok,ko)=>{const s=document.createElement('script');s.src=src;s.onload=ok;s.onerror=()=>ko(new Error('script'));document.head.appendChild(s)})}
+function leitor(){
+ if(!ocrP)ocrP=(async()=>{await carregarScript('https://cdn.jsdelivr.net/npm/tesseract.js@6.0.1/dist/tesseract.min.js');
+  return window.Tesseract.createWorker('por',1,{logger:m=>{if(m.status==='recognizing text')setOcr('A ler o talão… '+Math.round((m.progress||0)*100)+'%');else if(/load|init/i.test(m.status))setOcr('A preparar o leitor (só a 1.ª vez demora)…')}})})().catch(e=>{ocrP=null;throw e});
+ return ocrP;
+}
+async function abrirImagem(file){
+ if(window.createImageBitmap){try{return await createImageBitmap(file,{imageOrientation:'from-image'})}catch(_){}}
+ return await new Promise((ok,ko)=>{const i=new Image();i.onload=()=>ok(i);i.onerror=ko;i.src=URL.createObjectURL(file)});
+}
+function desenhar(img,maxW,maxH){const w=img.width,h=img.height,k=Math.min(1,maxW/w,maxH/h);const c=document.createElement('canvas');c.width=Math.round(w*k);c.height=Math.round(h*k);c.getContext('2d').drawImage(img,0,0,c.width,c.height);return c}
+function comprimir(img){let maxW=1000,maxH=2600,url='';for(let t=0;t<4;t++){const c=desenhar(img,maxW,maxH);for(const q of[.72,.6,.5,.4]){url=c.toDataURL('image/jpeg',q);if(url.length<480000)return url}maxW*=.8;maxH*=.8}return url}
+function paraLeitura(img){const c=desenhar(img,1600,4000),x=c.getContext('2d'),d=x.getImageData(0,0,c.width,c.height),p=d.data;
+ for(let i=0;i<p.length;i+=4){let g=.299*p[i]+.587*p[i+1]+.114*p[i+2];g=(g-128)*1.5+140;g=g<0?0:g>255?255:g;p[i]=p[i+1]=p[i+2]=g}x.putImageData(d,0,0);return c}
+async function tratarFoto(file){
+ if(!file||!F)return;const meu=F;
+ setOcr('A preparar a foto…');
+ let img;try{img=await abrirImagem(file)}catch(_){toast('Não consegui abrir essa imagem.');return}
+ if(F!==meu)return;
+ meu.talao=comprimir(img);meu.talaoMudou=true;meu.ocrMsg='A ler o talão…';redesenharFolha();
+ try{
+  const w=await leitor();const r=await w.recognize(paraLeitura(img));
+  if(F!==meu)return;
+  const t=lerTexto((r&&r.data&&r.data.text)||'');grab();
+  const partes=[];
+  if(t.total!=null){if(!String(meu.valor||'').trim()){meu.valor=String(t.total.toFixed(2)).replace('.',',');}partes.push('total '+E(t.total)+(t.certeza?'':' (provável)'))}
+  if(t.data){meu.data=t.data;partes.push(t.data.slice(8)+'/'+t.data.slice(5,7))}
+  if(t.loja){if(!String(meu.nota||'').trim())meu.nota=t.loja.n;if(!meu.catToque&&meu.tipo!=='r'){meu.cat=t.loja.c;meu.sub=t.loja.s}partes.push(t.loja.n)}
+  meu.ocrMsg=partes.length?'Li: '+partes.join(' · ')+'. Confirma antes de guardar.':'Não encontrei o total. Preenche o valor à mão.';
+ }catch(e){if(F!==meu)return;meu.ocrMsg='Leitura automática indisponível (precisa de rede na 1.ª vez). Foto guardada.'}
+ redesenharFolha(true);
+}
+function redesenharFolha(semLer){if(!F||!$('#sheet').classList.contains('open'))return;if(!semLer)grab();const s=$('#sheet'),y=s.scrollTop;s.innerHTML=F.kind==='fixo'?sheetFixo():F.kind==='meta'?sheetMeta():sheetMov();s.scrollTop=y}
+function talaoH(){
+ if(F.talao)return`<div class="tal"><img src="${F.talao}" alt="Talão" data-act="tal-ver"><div class="tal-t"><b>Talão anexado</b><small id="ocr-st">${esc(F.ocrMsg||'Toca na imagem para ver em grande.')}</small><button type="button" class="link" data-act="tal-rm">Remover talão</button></div></div>`;
+ if(F.temTalao)return`<div class="tal"><div class="tal-t"><small id="ocr-st">A carregar o talão…</small></div></div>`;
+ return F.ocrMsg?`<p class="sm muted" id="ocr-st">${esc(F.ocrMsg)}</p>`:'';
+}
+function verTalao(src){const v=$('#viewer');v.innerHTML=`<img src="${src}" alt="Talão"><button class="x" data-act="ver-fechar" aria-label="Fechar">×</button>`;v.classList.add('on')}
+
 /* ---------- folhas (formulários) ---------- */
 function openSheet(html){$('#sheet').innerHTML=html;$('#sheet').classList.add('open');$('#scrim').classList.add('open')}
 function closeSheet(){$('#sheet').classList.remove('open');$('#scrim').classList.remove('open');F=null;if(dirty)render()}
@@ -222,6 +299,8 @@ function sheetMov(){
  const cat=catO(F.cat),pes=[...memb(),'conj'];
  return`<div class="sh-h"><h2>${F.id?'Editar':'Novo'} movimento</h2><button class="x" data-act="close" aria-label="Fechar">×</button></div>
  <div class="seg"><button data-act="f-tipo" data-v="d" class="${F.tipo!=='r'?'on':''}">Despesa</button><button data-act="f-tipo" data-v="r" class="${F.tipo==='r'?'on':''}">Receita</button></div>
+ <div class="cam"><label class="btn acc"><input type="file" accept="image/*" capture="environment" id="f-cam">📷 Fotografar talão</label><label class="btn ghost"><input type="file" accept="image/*" id="f-gal">Galeria</label></div>
+ <div id="f-tal">${talaoH()}</div>
  <label class="big"><span>Valor (€)</span><input id="f-valor" data-f="valor" inputmode="decimal" autocomplete="off" placeholder="0,00" value="${esc(F.valor??'')}"></label>
  <div class="lbl">Categoria</div><div class="chips">${cats.map(c=>`<button data-act="f-cat" data-v="${c.k}" class="chip ${c.k===F.cat?'on':''}"><i style="background:${c.c}"></i>${esc(c.n)}</button>`).join('')}</div>
  <div class="lbl">Subcategoria</div><div class="chips">${cat.s.map(s=>`<button data-act="f-sub" data-v="${esc(s)}" class="chip sm ${s===F.sub?'on':''}">${esc(s)}</button>`).join('')}</div>
@@ -233,17 +312,20 @@ function sheetMov(){
 }
 function openMov(id){
  const x=id&&st.mov[id];const def=st.mes===mesDe(hoje())?hoje():st.mes+'-01';
- F=x?{...x,id,valor:String(x.valor).replace('.',',')}:{tipo:'d',cat:'alim',sub:'Supermercado',data:def,pag:st.me||'conj',part:true,nota:'',valor:''};
- openSheet(sheetMov());if(!x)setTimeout(()=>{const v=$('#f-valor');v&&v.focus()},250);
+ F=x?{...x,id,valor:String(x.valor).replace('.',','),temTalao:!!x.talao,catToque:true}:{tipo:'d',cat:'alim',sub:'Supermercado',data:def,pag:st.me||'conj',part:true,nota:'',valor:''};
+ F.kind='mov';openSheet(sheetMov());
+ if(x&&x.talao){const meu=F;getDoc(doc(fs,'talao',id)).then(d=>{if(F===meu){meu.talao=d.exists()?d.data().img:null;meu.temTalao=false;if(!meu.talao)meu.ocrMsg='Talão não disponível sem rede.';redesenharFolha()}}).catch(()=>{if(F===meu){meu.temTalao=false;meu.ocrMsg='Talão não disponível sem rede.';redesenharFolha()}})}
 }
 async function saveMov(){
  grab();const v=num(F.valor);if(!(v>0)){toast('Indica um valor maior que zero.');return}
  if(!/^\d{4}-\d{2}-\d{2}$/.test(F.data||'')){toast('Indica a data.');return}
  const ed=!!F.id,id=F.id||uid();
- const o={tipo:F.tipo==='r'?'r':'d',valor:v,cat:F.cat,sub:F.sub||'',data:F.data,mes:F.data.slice(0,7),pag:F.pag||'conj',part:F.tipo==='r'?false:F.part!==false,nota:String(F.nota||'').trim().slice(0,120),fixo:F.fixo||null,por:F.por||st.me||'',em:new Date().toISOString()};
- closeSheet();if(o.mes!==st.mes&&!ed){st.mes=o.mes}await saveDoc('mov',id,o);toast(ed?'Movimento alterado':'Guardado: '+E(v));
+ const o={tipo:F.tipo==='r'?'r':'d',valor:v,cat:F.cat,sub:F.sub||'',data:F.data,mes:F.data.slice(0,7),pag:F.pag||'conj',part:F.tipo==='r'?false:F.part!==false,nota:String(F.nota||'').trim().slice(0,120),fixo:F.fixo||null,por:F.por||st.me||'',em:new Date().toISOString(),talao:F.talaoMudou?!!F.talao:!!(st.mov[id]&&st.mov[id].talao)};
+ const tm=F.talaoMudou,ti=F.talao;
+ closeSheet();if(o.mes!==st.mes&&!ed){st.mes=o.mes}await saveDoc('mov',id,o);
+ if(tm){if(ti)saveDoc('talao',id,{img:ti,mov:id,em:o.em});else delDoc('talao',id)}toast(ed?'Movimento alterado':'Guardado: '+E(v));
 }
-function delMov(){const id=F.id,old=st.mov[id];closeSheet();if(!old)return;delDoc('mov',id);toast('Movimento apagado','Anular',()=>saveDoc('mov',id,{...old}))}
+function delMov(){const id=F.id,old=st.mov[id];closeSheet();if(!old)return;delDoc('mov',id);const tt=old.talao?setTimeout(()=>delDoc('talao',id),8000):0;toast('Movimento apagado','Anular',()=>{clearTimeout(tt);saveDoc('mov',id,{...old})})}
 
 function sheetFixo(){
  const cats=F.tipo==='r'?RCATS:CATS;if(!cats.some(c=>c.k===F.cat)){F.cat=cats[0].k;F.sub=cats[0].s[0]}
@@ -281,7 +363,7 @@ function sheetMeta(){return`<div class="sh-h"><h2>${F.id?'Editar':'Nova'} meta</
  <label><span>Somar agora (€)</span><input data-f="soma" inputmode="decimal" value="" placeholder="Ex.: 100"></label>
  <label><span>Prazo (opcional)</span><input type="month" data-f="prazo" value="${esc(F.prazo||'')}" placeholder="AAAA-MM"></label>
  <div class="acts">${F.id?'<button class="btn ghost" data-act="m-del">Apagar</button>':''}<button class="btn" data-act="m-save">Guardar</button></div>`}
-function openMeta(id){const x=id&&st.metas[id];F=x?{...x,id,alvo:String(x.alvo).replace('.',','),atual:String(x.atual).replace('.',',')}:{nome:'',alvo:'',atual:'0',prazo:''};openSheet(sheetMeta())}
+function openMeta(id){const x=id&&st.metas[id];F=x?{...x,id,alvo:String(x.alvo).replace('.',','),atual:String(x.atual).replace('.',',')}:{nome:'',alvo:'',atual:'0',prazo:''};F.kind='meta';openSheet(sheetMeta())}
 async function saveMeta(){grab();const a=num(F.alvo),c=(num(F.atual)||0)+(num(F.soma)||0);if(!String(F.nome||'').trim()||!(a>0)){toast('Indica nome e objetivo.');return}
  const o={nome:String(F.nome).trim().slice(0,60),alvo:a,atual:Math.round(c*100)/100,prazo:/^\d{4}-\d{2}$/.test(F.prazo||'')?F.prazo:''};const id=F.id||uid();closeSheet();await saveDoc('metas',id,o);toast('Meta guardada')}
 function delMeta(){const id=F.id,old=st.metas[id];closeSheet();if(!old)return;delDoc('metas',id);toast('Meta apagada','Anular',()=>saveDoc('metas',id,{...old}))}
@@ -331,8 +413,8 @@ document.addEventListener('click',e=>{
  else if(act==='novo'){if(!st.ro)openMov()}
  else if(act==='edit'){if(!st.ro)openMov(t.dataset.id)}
  else if(act==='close')closeSheet();
- else if(act==='f-tipo'){grab();F.tipo=v;F.cat=v==='r'?'sal':'alim';F.sub=catO(F.cat).s[0];$('#sheet').innerHTML=sheetMov()}
- else if(act==='f-cat'){grab();F.cat=v;F.sub=catO(v).s[0];$('#sheet').innerHTML=sheetMov()}
+ else if(act==='f-tipo'){grab();F.catToque=true;F.tipo=v;F.cat=v==='r'?'sal':'alim';F.sub=catO(F.cat).s[0];$('#sheet').innerHTML=sheetMov()}
+ else if(act==='f-cat'){grab();F.catToque=true;F.cat=v;F.sub=catO(v).s[0];$('#sheet').innerHTML=sheetMov()}
  else if(act==='f-sub'){grab();F.sub=v;$('#sheet').innerHTML=sheetMov()}
  else if(act==='f-pag'){grab();F.pag=v;$('#sheet').innerHTML=sheetMov()}
  else if(act==='f-save')saveMov();
@@ -350,6 +432,9 @@ document.addEventListener('click',e=>{
  else if(act==='filtro'){st.filtro=v;document.querySelectorAll('#fch .chip').forEach(c=>c.classList.toggle('on',c.dataset.v===v));$('#mov-list').innerHTML=listMov()}
  else if(act==='undo'){const f=undoFn;undoFn=null;$('#toast').classList.remove('on');if(f)f()}
  else if(act==='sair'){signOut(auth)}
+ else if(act==='tal-ver'){if(F&&F.talao)verTalao(F.talao)}
+ else if(act==='ver-fechar'||t.id==='viewer'){$('#viewer').classList.remove('on');$('#viewer').innerHTML=''}
+ else if(act==='tal-rm'){grab();F.talao=null;F.talaoMudou=true;F.ocrMsg='';redesenharFolha()}
  else if(act==='instalar'){if(deferredPrompt){deferredPrompt.prompt();deferredPrompt=null}}
  else if(act==='reload'){location.reload()}
  else if(act==='pass'){const p=$('#np').value;if(p.length<6){toast('Mínimo 6 caracteres.');return}updatePassword(auth.currentUser,p).then(()=>{$('#np').value='';toast('Palavra-passe alterada')},e=>toast(String(e.code).includes('recent-login')?'Por segurança, sai e volta a entrar antes de alterar a palavra-passe.':'Não foi possível alterar ('+e.code+').'))}
@@ -360,6 +445,7 @@ document.addEventListener('click',e=>{
 });
 document.addEventListener('change',e=>{
  const t=e.target;
+ if(t.id==='f-cam'||t.id==='f-gal'){const f=t.files&&t.files[0];t.value='';tratarFoto(f);return}
  if(t.id==='x-cat'&&F){grab();F.sub=catO(F.cat).s[0];$('#sheet').innerHTML=sheetFixo();return}
  if(t.dataset.orc){const o=clone(st.orc);o.cats=o.cats||{};const n=num(t.value);const old=+o.cats[t.dataset.orc]||0;if(n>0)o.cats[t.dataset.orc]=n;else delete o.cats[t.dataset.orc];if((+o.cats[t.dataset.orc]||0)!==old)saveDoc('cfg','orc',o);return}
  if(t.dataset.alc){const c=clone(st.cfg);c.membros=c.membros||{};c.membros[t.dataset.alc]={...(c.membros[t.dataset.alc]||{}),alcunha:t.value.trim().slice(0,30)};saveDoc('cfg','casa',c);return}

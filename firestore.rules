@@ -8,7 +8,7 @@ service cloud.firestore {
         && request.auth.token.email.lower() in ['vitordiasleite@gmail.com', 'carinalestre@gmail.com'];
     }
     match /{col}/{id} {
-      allow read, write: if membro() && col in ['mov', 'fixos', 'metas', 'cfg'];
+      allow read, write: if membro() && col in ['mov', 'fixos', 'metas', 'cfg', 'talao'];
     }
   }
 }
