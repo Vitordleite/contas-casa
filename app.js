@@ -1,6 +1,6 @@
 import {initializeApp,getAuth,signInWithEmailAndPassword,onAuthStateChanged,signOut,updatePassword,sendPasswordResetEmail,initializeFirestore,persistentLocalCache,persistentMultipleTabManager,collection,doc,setDoc,deleteDoc,onSnapshot,query,where} from './firebase.js';
 import {firebaseConfig} from './config.js';
-const VERSAO='1.0.0';
+const VERSAO='1.0.1';
 const $=s=>document.querySelector(s);
 const eur=new Intl.NumberFormat('pt-PT',{style:'currency',currency:'EUR'});
 const E=v=>eur.format(v||0);
@@ -378,7 +378,7 @@ window.addEventListener('hashchange',()=>{const h=(location.hash||'').slice(1);i
 /* ---------- arranque ---------- */
 let deferredPrompt=null;
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPrompt=e;if(st.tab==='mais')render()});
-function showLogin(on){document.body.classList.toggle('auth',!on);$('#login').hidden=!on}
+function showLogin(on){document.body.classList.toggle('auth',on);$('#login').hidden=!on}
 let unsubs=[];
 function startData(){
  const ok=(s)=>{if(!s.metadata.fromCache&&navigator.onLine){st.mode='sync'}};
