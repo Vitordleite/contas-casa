@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#06222e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Contas">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<title>Contas da Casa</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+<style>
+/* VOICE: calmo e prático, de casa — números grandes, palavras simples
+   IDEA: o caderno de contas da cozinha, com o saldo do mês escrito a marcador
+   PICTURE: o saldo do mês em grande, com a régua receitas / despesas / poupança
+   COLOUR and TYPE: gelo #dff1f7, tinta #06222e, rosa #ff2e7e; Space Grotesk + Inter
+   LAYOUT: app de telemóvel numa coluna (até 560px), separadores fixos em baixo */
+:root{color-scheme:light dark;--bg:light-dark(#dff1f7,#06222e);--ink:light-dark(#06222e,#e3f3f9);--card:light-dark(#ffffff,#0d3243);--mut:light-dark(#4a6875,#93b6c4);--line:light-dark(#c4dde7,#1d4b5e);--acc:#ff2e7e;--rec:light-dark(#0a7d8c,#4fd1dd);--warn:light-dark(#b45309,#fbbf24);--soft:light-dark(#eef8fb,#0a2a39)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 Inter,system-ui,sans-serif;overflow-x:clip}
+h1,h2,h3,.num{font-family:"Space Grotesk",Inter,sans-serif;font-weight:700;letter-spacing:-.01em}
+h1{font-size:20px;margin:0}h2{font-size:20px;margin:0 0 10px;line-height:1.15}h3{font-size:16px;margin:0 0 8px}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+.wrap{max-width:560px;margin:0 auto;padding:0 14px calc(96px + env(safe-area-inset-bottom))}
+.top{position:sticky;top:0;z-index:5;background:var(--bg);padding:calc(10px + env(safe-area-inset-top)) 14px 8px;max-width:560px;margin:0 auto}
+.top .r1{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.st{font-size:13px;color:var(--mut);display:flex;align-items:center;gap:6px;white-space:nowrap}
+.st i{width:8px;height:8px;border-radius:50%;background:var(--mut);display:inline-block}
+.st.ok i{background:var(--rec)}.st.bad i{background:var(--acc)}
+.mes{display:flex;align-items:center;justify-content:space-between;margin-top:8px;background:var(--card);border-radius:14px;padding:4px}
+.mes b{font-family:"Space Grotesk";font-size:17px;text-transform:capitalize}
+.ib{width:44px;height:44px;border:0;background:transparent;border-radius:10px;font-size:22px}
+.ib:disabled{opacity:.3}
+.card{background:var(--card);border-radius:18px;padding:16px;margin:12px 0}
+.hero{background:var(--ink);color:var(--bg);border-radius:22px;padding:20px 18px 18px;margin:10px 0 12px}
+.hero .lab{font-size:14px;opacity:.8}
+.hero .big{font-family:"Space Grotesk";font-weight:700;font-size:clamp(40px,12vw,56px);line-height:1.05;white-space:nowrap}
+.hero .sub{font-size:14px;opacity:.85;margin-top:4px}
+.ruler{display:flex;height:14px;border-radius:7px;overflow:hidden;margin:16px 0 10px;background:color-mix(in srgb,var(--bg) 20%,transparent)}
+.ruler span{display:block;height:100%}
+.kp{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.kp div{font-size:13px;opacity:.85}.kp b{display:block;font-family:"Space Grotesk";font-size:17px;opacity:1;white-space:nowrap}
+.dot{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:5px;vertical-align:0}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.tile{background:var(--card);border-radius:16px;padding:14px}
+.tile small{display:block;color:var(--mut);font-size:13px}
+.tile b{display:block;font-family:"Space Grotesk";font-size:22px;white-space:nowrap}
+.tile em{font-style:normal;font-size:13px;color:var(--mut)}
+.up{color:var(--acc)}.down{color:var(--rec)}
+.bars{display:grid;gap:10px}
+.br .t{display:flex;justify-content:space-between;gap:8px;font-size:15px}
+.br .t span:last-child{white-space:nowrap;font-variant-numeric:tabular-nums}
+.br .tr{position:relative;height:10px;background:var(--soft);border-radius:5px;margin-top:4px;overflow:hidden}
+.br .tr i{position:absolute;inset:0 auto 0 0;border-radius:5px;background:var(--ink)}
+.br.over .tr i{background:var(--acc)}.br.near .tr i{background:var(--warn)}
+.br .bud{position:absolute;top:0;bottom:0;width:2px;background:var(--acc)}
+.br small{color:var(--mut);font-size:13px}
+.fig{position:relative;height:190px}.fig>svg{position:absolute;inset:0;width:100%;height:100%}
+.leg{display:flex;gap:14px;font-size:13px;color:var(--mut);flex-wrap:wrap}
+.alert{border-radius:14px;padding:12px 14px;margin:10px 0;background:color-mix(in srgb,var(--acc) 14%,var(--card));font-size:15px}
+.alert.w{background:color-mix(in srgb,var(--warn) 16%,var(--card))}
+.alert.i{background:var(--card)}
+.muted{color:var(--mut)}.sm{font-size:13px}
+.btn{min-height:44px;border:0;border-radius:12px;padding:10px 16px;background:var(--ink);color:var(--bg);font-weight:600}
+.btn.acc{background:var(--acc);color:#fff}
+.btn.ghost{background:transparent;color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--line)}
+.btn.full{width:100%}
+.list{background:var(--card);border-radius:18px;overflow:hidden;margin:6px 0 14px}
+.day{font-size:13px;color:var(--mut);padding:14px 4px 2px;text-transform:capitalize}
+.it{display:flex;align-items:center;gap:12px;padding:12px 14px;border:0;background:transparent;width:100%;text-align:left;border-top:1px solid var(--line)}
+.it:first-child{border-top:0}
+.bdg{flex:none;width:38px;height:38px;border-radius:11px;display:grid;place-items:center;color:#fff;font:700 13px "Space Grotesk"}
+.it .mid{flex:1}.it .mid b{display:block;font-weight:600;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.it .mid small{color:var(--mut);font-size:13px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.it .v{font-family:"Space Grotesk";font-weight:700;white-space:nowrap;font-variant-numeric:tabular-nums}
+.it .v.r{color:var(--rec)}
+.tag{display:inline-block;font-size:12px;padding:2px 8px;border-radius:99px;background:var(--soft);color:var(--mut);margin-left:4px;white-space:nowrap}
+.tag.ok{color:var(--rec)}.tag.p{color:var(--acc)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 12px}
+.chip{min-height:40px;border:0;border-radius:99px;padding:8px 13px;background:var(--soft);font-size:14px;display:inline-flex;align-items:center;gap:6px}
+.chip i{width:10px;height:10px;border-radius:3px}
+.chip.on{background:var(--ink);color:var(--bg)}
+.chip.sm{min-height:36px;font-size:13px;padding:6px 11px}
+.search{width:100%;height:46px;border-radius:12px;border:1.5px solid var(--line);background:var(--card);padding:0 14px;font-size:16px}
+label{display:block;margin:10px 0}
+label>span,.lbl{display:block;font-size:13px;color:var(--mut);margin-bottom:4px}
+input[type=text],input:not([type]),input[type=date],input[type=month],input[type=number],select{width:100%;height:46px;border-radius:12px;border:1.5px solid var(--line);background:var(--soft);padding:0 12px;font-size:16px}
+label.big input{height:62px;font:700 30px "Space Grotesk"}
+.chk{display:flex;gap:10px;align-items:center;font-size:15px}.chk input{width:22px;height:22px;accent-color:var(--acc)}
+.row2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.row2 label{margin:6px 0}
+.seg{display:grid;grid-template-columns:1fr 1fr;background:var(--soft);border-radius:12px;padding:4px;gap:4px;margin-bottom:6px}
+.seg button{min-height:42px;border:0;border-radius:9px;background:transparent;font-weight:600}
+.seg button.on{background:var(--ink);color:var(--bg)}
+.acts{display:flex;gap:10px;justify-content:flex-end;margin-top:16px}.acts .btn{flex:1}
+.scrim{position:fixed;inset:0;background:rgba(3,20,28,.45);z-index:20;display:none}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:21;background:var(--card);border-radius:22px 22px 0 0;max-width:560px;margin:0 auto;max-height:92vh;overflow:auto;padding:14px 16px calc(18px + env(safe-area-inset-bottom));transform:translateY(105%);transition:transform .22s ease}
+.sheet.open{transform:none}.scrim.open{display:block}
+.sh-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}.sh-h h2{margin:0}
+.x{width:44px;height:44px;border:0;background:var(--soft);border-radius:12px;font-size:22px}
+nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:10;background:var(--card);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
+nav.tabs div{max-width:560px;margin:0 auto;display:grid;grid-template-columns:repeat(5,minmax(0,1fr))}
+nav.tabs button{border:0;background:transparent;min-height:58px;font-size:12px;color:var(--mut);display:grid;place-items:center;gap:2px;padding:6px 0}
+nav.tabs button svg{width:22px;height:22px}
+nav.tabs button.on{color:var(--ink);font-weight:600}
+nav.tabs button.on svg{color:var(--acc)}
+.fab{position:fixed;right:max(16px,calc(50vw - 264px));bottom:calc(74px + env(safe-area-inset-bottom));z-index:11;width:60px;height:60px;border-radius:20px;border:0;background:var(--acc);color:#fff;font-size:32px;line-height:1;box-shadow:0 8px 22px rgba(255,46,126,.35)}
+.toast{position:fixed;left:50%;bottom:calc(146px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:30;background:var(--ink);color:var(--bg);border-radius:14px;padding:10px 14px;font-size:15px;display:none;align-items:center;gap:12px;max-width:92vw}
+.toast.on{display:flex}.toast button{border:0;background:transparent;color:var(--acc);font-weight:700;min-height:36px}
+.prog{height:10px;border-radius:5px;background:var(--soft);overflow:hidden;margin:8px 0 4px}.prog i{display:block;height:100%;background:var(--acc);border-radius:5px}
+.orow{display:grid;grid-template-columns:minmax(0,1fr) 110px;gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.orow:first-child{border-top:0}.orow input{height:42px;text-align:right}
+.empty{text-align:center;padding:24px 14px;color:var(--mut)}
+.steps{margin:8px 0 0;padding-left:20px}.steps li{margin:6px 0}
+textarea{width:100%;min-height:140px;border-radius:12px;border:1.5px solid var(--line);background:var(--soft);font:13px/1.4 ui-monospace,monospace;padding:10px}
+input[type=range]{width:100%;accent-color:var(--acc);height:36px}
+@media (prefers-reduced-motion:reduce){.sheet{transition:none}}
+
+body.auth .top,body.auth .wrap,body.auth nav.tabs,body.auth .fab{display:none!important}
+#login{min-height:100vh;min-height:100dvh;display:grid;place-items:center;padding:24px max(18px,env(safe-area-inset-left)) calc(24px + env(safe-area-inset-bottom))}
+#login[hidden]{display:none}
+#login form{width:100%;max-width:380px}
+#login .logo{width:84px;height:84px;border-radius:22px;display:block;margin:0 0 18px}
+#login h1{font-size:34px;line-height:1.05;margin:0 0 6px}
+#login p{color:var(--mut);margin:0 0 18px}
+#lm{min-height:24px;color:var(--acc);font-size:15px;margin-top:10px}
+.link{background:none;border:0;color:var(--mut);text-decoration:underline;min-height:44px;padding:0;margin-top:6px}
+</style>
+</head>
+<body class="auth">
+<section id="login" hidden>
+ <form id="lf" autocomplete="on">
+  <img class="logo" src="icons/icon-192.png" alt="">
+  <h1>Contas da casa</h1>
+  <p>Entra com a conta que o Vitor criou para ti.</p>
+  <label><span>E-mail</span><input id="le" type="email" autocomplete="username" inputmode="email" required></label>
+  <label><span>Palavra-passe</span><input id="lp" type="password" autocomplete="current-password" required></label>
+  <button class="btn acc full" id="lb" type="submit" style="margin-top:8px">Entrar</button>
+  <button class="link" id="lr" type="button">Esqueci-me da palavra-passe</button>
+  <div id="lm" role="status"></div>
+ </form>
+</section>
+<header class="top">
+  <div class="r1"><h1>Contas da casa</h1><span class="st" id="st"><i></i><span>A ligar…</span></span></div>
+  <div class="mes"><button class="ib" data-act="mes" data-v="-1" aria-label="Mês anterior">‹</button><b id="mesl"></b><button class="ib" data-act="mes" data-v="1" aria-label="Mês seguinte">›</button></div>
+</header>
+<div class="wrap"><main id="view"></main></div>
+<button class="fab" id="fab" data-act="novo" aria-label="Novo movimento">+</button>
+<nav class="tabs"><div id="tabs"></div></nav>
+<div class="scrim" id="scrim" data-act="close"></div>
+<div class="sheet" id="sheet" role="dialog" aria-modal="true"></div>
+<div class="toast" id="toast" role="status"><span id="tmsg"></span><button id="tbtn" data-act="undo"></button></div>
+<script type="module" src="app.js"></script>
+</body>
+</html>
