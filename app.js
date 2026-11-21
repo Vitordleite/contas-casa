@@ -1,6 +1,6 @@
 import {initializeApp,getAuth,signInWithEmailAndPassword,onAuthStateChanged,signOut,updatePassword,sendPasswordResetEmail,initializeFirestore,persistentLocalCache,persistentMultipleTabManager,collection,doc,setDoc,getDoc,deleteDoc,onSnapshot,query,where} from './firebase.js';
 import {firebaseConfig} from './config.js';
-const VERSAO='1.1.0';
+const VERSAO='1.1.1';
 const $=s=>document.querySelector(s);
 const eur=new Intl.NumberFormat('pt-PT',{style:'currency',currency:'EUR'});
 const E=v=>eur.format(v||0);
@@ -301,6 +301,7 @@ function sheetMov(){
  <div class="seg"><button data-act="f-tipo" data-v="d" class="${F.tipo!=='r'?'on':''}">Despesa</button><button data-act="f-tipo" data-v="r" class="${F.tipo==='r'?'on':''}">Receita</button></div>
  <div class="cam"><label class="btn acc"><input type="file" accept="image/*" capture="environment" id="f-cam">📷 Fotografar talão</label><label class="btn ghost"><input type="file" accept="image/*" id="f-gal">Galeria</label></div>
  <div id="f-tal">${talaoH()}</div>
+ ${F.itens&&F.itens.length?`<details class="card" style="margin:8px 0;padding:10px 12px"><summary class="sm"><b>${F.itens.length} artigos do talão</b>${F.total_talao?' · total do talão '+E(F.total_talao):''}</summary>${F.itens.map(i=>`<div class="sm" style="display:flex;justify-content:space-between;gap:8px;padding:3px 0"><span>${esc(i.nome)}</span><span style="white-space:nowrap">${E(i.valor)}</span></div>`).join('')}</details>`:''}
  <label class="big"><span>Valor (€)</span><input id="f-valor" data-f="valor" inputmode="decimal" autocomplete="off" placeholder="0,00" value="${esc(F.valor??'')}"></label>
  <div class="lbl">Categoria</div><div class="chips">${cats.map(c=>`<button data-act="f-cat" data-v="${c.k}" class="chip ${c.k===F.cat?'on':''}"><i style="background:${c.c}"></i>${esc(c.n)}</button>`).join('')}</div>
  <div class="lbl">Subcategoria</div><div class="chips">${cat.s.map(s=>`<button data-act="f-sub" data-v="${esc(s)}" class="chip sm ${s===F.sub?'on':''}">${esc(s)}</button>`).join('')}</div>
@@ -321,6 +322,7 @@ async function saveMov(){
  if(!/^\d{4}-\d{2}-\d{2}$/.test(F.data||'')){toast('Indica a data.');return}
  const ed=!!F.id,id=F.id||uid();
  const o={tipo:F.tipo==='r'?'r':'d',valor:v,cat:F.cat,sub:F.sub||'',data:F.data,mes:F.data.slice(0,7),pag:F.pag||'conj',part:F.tipo==='r'?false:F.part!==false,nota:String(F.nota||'').trim().slice(0,120),fixo:F.fixo||null,por:F.por||st.me||'',em:new Date().toISOString(),talao:F.talaoMudou?!!F.talao:!!(st.mov[id]&&st.mov[id].talao)};
+ {const ant=st.mov[id];if(ant)for(const k of['itens','processado','total_talao','ligado'])if(ant[k]!==undefined&&o[k]===undefined)o[k]=ant[k];}
  const tm=F.talaoMudou,ti=F.talao;
  closeSheet();if(o.mes!==st.mes&&!ed){st.mes=o.mes}await saveDoc('mov',id,o);
  if(tm){if(ti)saveDoc('talao',id,{img:ti,mov:id,em:o.em});else delDoc('talao',id)}toast(ed?'Movimento alterado':'Guardado: '+E(v));
