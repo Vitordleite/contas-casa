@@ -9,11 +9,10 @@ service cloud.firestore {
     }
     // Conta técnica usada pelo PC para enviar as leituras dos ACs.
     // Só consegue CRIAR documentos em 'consumo' (não lê, não altera, não apaga).
-    // Substituir pelo e-mail real da conta criada em Authentication.
     function tecnico() {
       return request.auth != null
         && request.auth.token.email != null
-        && request.auth.token.email.lower() == 'TECNICO_EMAIL';
+        && request.auth.token.email.lower() == 'pc-acs@contas-casa.pt';
     }
     match /consumo/{id} {
       allow read: if membro();
