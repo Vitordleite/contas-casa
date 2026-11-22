@@ -1,6 +1,6 @@
 import {initializeApp,getAuth,signInWithEmailAndPassword,onAuthStateChanged,signOut,updatePassword,sendPasswordResetEmail,initializeFirestore,persistentLocalCache,persistentMultipleTabManager,collection,doc,setDoc,getDoc,deleteDoc,onSnapshot,query,where} from './firebase.js';
 import {firebaseConfig} from './config.js';
-const VERSAO='1.1.1';
+const VERSAO='1.2.0';
 const $=s=>document.querySelector(s);
 const eur=new Intl.NumberFormat('pt-PT',{style:'currency',currency:'EUR'});
 const E=v=>eur.format(v||0);
@@ -52,7 +52,7 @@ const catO=k=>ALL.find(c=>c.k===k)||CATS[CATS.length-1];
 const PER={1:'mensal',2:'bimestral',3:'trimestral',6:'semestral',12:'anual'};
 const TABS=[['resumo','Resumo','M3 13h8V3H3zm0 8h8v-6H3zm10 0h8V11h-8zm0-18v6h8V3z'],['movimentos','Movimentos','M4 6h16M4 12h16M4 18h10'],['fixos','Fixos','M7 3v4M17 3v4M4 9h16M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z'],['orcamento','Orçamento','M12 3a9 9 0 1 0 9 9h-9z M14 2.5V10h7.5A8 8 0 0 0 14 2.5z'],['mais','Mais','M5 12h.01M12 12h.01M19 12h.01']];
 
-const st={pend:false,email:'',mov:{},fixos:{},metas:{},cfg:{membros:{},divisao:50},orc:{cats:{}},me:null,mes:mesDe(hoje()),tab:'resumo',ro:false,mode:'wait',filtro:'todos',q:''};
+const st={pend:false,email:'',mov:{},fixos:{},metas:{},cfg:{membros:{},divisao:50},orc:{cats:{}},consumo:{},energia:{},me:null,mes:mesDe(hoje()),tab:'resumo',ro:false,mode:'wait',filtro:'todos',q:''};
 const DESDE=addMes(mesDe(hoje()),-24);
 const names={};
 let db=null,user=null,F=null,undoFn=null,toastT=0,dirty=false;
@@ -188,6 +188,48 @@ function vOrc(){
  const r6=Array.from({length:3},(_,i)=>totais(addMes(st.mes,-1-i)).R).filter(Boolean),medR=r6.length?r6.reduce((a,b)=>a+b,0)/r6.length:0;
  let h=`<section class="hero"><div class="lab">Orçamento mensal</div><div class="big num">${E0(tot)}</div><div class="sub">${tot?`Usado ${E0(usado)} (${Math.round(usado/tot*100)}%) em ${nomeMes(st.mes)}`:'Define limites para receber alertas no Resumo'}${medR?` · receita média ${E0(medR)}`:''}</div>${tot?`<div class="ruler"><span style="width:${Math.min(usado/tot,1)*100}%;background:${usado>tot?'var(--acc)':'#4fd1dd'}"></span></div>`:''}</section>`;
  h+=`<div class="card">${CATS.map(c=>{const v=by[c.k]||0,lim=+o[c.k]||0;return`<div class="orow"><div><div style="display:flex;align-items:center;gap:8px"><span class="dot" style="background:${c.c}"></span><b style="font-weight:600">${esc(c.n)}</b></div><div class="sm muted">gasto ${E(v)}${lim?` · ${v>lim?'<span class="up">excedeu '+E(v-lim)+'</span>':'restam '+E(lim-v)}`:''}</div>${lim?`<div class="prog" style="margin:6px 0 0"><i style="width:${Math.min(v/lim,1)*100}%;background:${v>lim?'var(--acc)':v>=lim*.8?'var(--warn)':'var(--rec)'}"></i></div>`:''}</div><input inputmode="decimal" data-orc="${c.k}" value="${lim?String(lim).replace('.',','):''}" placeholder="€ / mês" aria-label="Orçamento ${esc(c.n)}" ${st.ro?'disabled':''}></div>`}).join('')}</div>`;
+ return h;
+}
+
+/* ---------- consumo elétrico dos ACs (lido no PC e enviado para 'consumo') ---------- */
+const DIVS={sala:'Sala',quarto:'Quarto'};
+const diaLocal=ts=>hoje0(new Date(ts));
+const hoje0=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+const kwhF=v=>new Intl.NumberFormat('pt-PT',{minimumFractionDigits:2,maximumFractionDigits:2}).format(v)+' kWh';
+const fmtCurto=d=>d.slice(8)+'/'+d.slice(5,7);
+function intervalosConsumo(){
+ const por={};
+ Object.values(st.consumo).forEach(r=>{if(r&&r.div&&r.ts&&isFinite(r.energia_wh))(por[r.div]=por[r.div]||[]).push(r)});
+ const out=[];
+ Object.entries(por).forEach(([div,rs])=>{
+  rs.sort((a,b)=>String(a.ts).localeCompare(String(b.ts)));
+  for(let i=1;i<rs.length;i++){
+   const d=rs[i].energia_wh-rs[i-1].energia_wh;if(!(d>=0))continue; // contador reiniciado: ignora
+   const t0=new Date(rs[i-1].ts),t1=new Date(rs[i].ts);
+   out.push({div,kwh:d/1000,fim:diaLocal(rs[i].ts),ini:diaLocal(rs[i-1].ts),horas:(t1-t0)/36e5});
+  }
+ });
+ return out;
+}
+function vEnergia(){
+ const preco=+st.energia.preco>0?+st.energia.preco:0;
+ const todas=intervalosConsumo(),m=st.mes;
+ const iv=todas.filter(x=>mesDe(x.fim)===m);
+ const ultima=Object.values(st.consumo).map(r=>r.ts).filter(Boolean).sort().pop();
+ let h=`<div class="card"><h2>Consumo elétrico dos ACs</h2>`;
+ h+=`<label><span>Preço da eletricidade (€/kWh)</span><input id="kwh" inputmode="decimal" value="${preco?String(preco).replace('.',','):''}" placeholder="ex.: 0,18"></label>`;
+ if(!todas.length){
+  h+=`<p class="sm muted">Ainda não há leituras suficientes. O PC envia uma leitura por dia; a partir da segunda leitura de cada AC aparece aqui o consumo.</p></div>`;return h}
+ const dias={};
+ iv.forEach(x=>{const d=dias[x.fim]=dias[x.fim]||{kwh:{},ini:x.ini,longo:false};d.kwh[x.div]=(d.kwh[x.div]||0)+x.kwh;if(x.ini<x.fim&&x.horas>36){d.longo=true;if(x.ini<d.ini||d.ini===x.fim)d.ini=x.ini}});
+ const tot={};let totAll=0;iv.forEach(x=>{tot[x.div]=(tot[x.div]||0)+x.kwh;totAll+=x.kwh});
+ h+=`<div class="grid2" style="margin:10px 0"><div class="tile"><small>${nomeMes(m)}</small><b>${kwhF(totAll)}</b><em>${Object.entries(tot).map(([k,v])=>(DIVS[k]||k)+' '+kwhF(v)).join(' · ')||'sem leituras neste mês'}</em></div><div class="tile"><small>Custo</small><b>${preco?E(totAll*preco):'—'}</b><em>${preco?'a '+String(preco).replace('.',',')+' €/kWh':'indica o preço acima'}</em></div></div>`;
+ const ks=Object.keys(dias).sort().reverse();
+ h+=ks.length?`<div class="bars">`+ks.map(k=>{const d=dias[k],t=Object.values(d.kwh).reduce((a,b)=>a+b,0);
+  const lab=d.longo?`${fmtCurto(d.ini)} → ${fmtCurto(k)}`:fmtCurto(k);
+  const det=Object.entries(d.kwh).map(([a,v])=>(DIVS[a]||a)+' '+kwhF(v)).join(' · ');
+  return`<div class="br"><div class="t"><span>${lab}${d.longo?' <small class="muted">(vários dias sem leitura)</small>':''}</span><span>${kwhF(t)}${preco?' · '+E(t*preco):''}</span></div><small>${det}</small></div>`}).join('')+`</div>`:'<p class="sm muted">Sem leituras neste mês.</p>';
+ h+=`<p class="sm muted" style="margin-top:10px">Cada linha é o consumo entre duas leituras do contador do AC, atribuído ao dia da leitura mais recente. Dias sem leitura não são estimados: quando o PC volta a ler, o consumo desse período aparece numa única linha.${ultima?' Última leitura: '+new Date(ultima).toLocaleString('pt-PT',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+'.':''}</p></div>`;
  return h;
 }
 
@@ -394,7 +436,7 @@ function render(){
  if(a&&v.contains(a)&&a.tagName==='INPUT'){dirty=true;if(st.tab==='movimentos'&&$('#mov-list'))$('#mov-list').innerHTML=listMov();return}
  if($('#sheet').classList.contains('open'))dirty=true;
  const fn={resumo:vResumo,movimentos:vMov,fixos:vFixos,orcamento:vOrc,mais:vMais}[st.tab]||vResumo;
- v.innerHTML=fn();if(st.tab==='movimentos')$('#mov-list').innerHTML=listMov();
+ v.innerHTML=fn()+(st.tab==='resumo'&&st.me?vEnergia():'');if(st.tab==='movimentos')$('#mov-list').innerHTML=listMov();
  roTrend.disconnect();const s=$('#trend');if(s)roTrend.observe(s);
  dirty=false;
 }
@@ -452,6 +494,7 @@ document.addEventListener('change',e=>{
  if(t.dataset.orc){const o=clone(st.orc);o.cats=o.cats||{};const n=num(t.value);const old=+o.cats[t.dataset.orc]||0;if(n>0)o.cats[t.dataset.orc]=n;else delete o.cats[t.dataset.orc];if((+o.cats[t.dataset.orc]||0)!==old)saveDoc('cfg','orc',o);return}
  if(t.dataset.alc){const c=clone(st.cfg);c.membros=c.membros||{};c.membros[t.dataset.alc]={...(c.membros[t.dataset.alc]||{}),alcunha:t.value.trim().slice(0,30)};saveDoc('cfg','casa',c);return}
  if(t.id==='div'){const c=clone(st.cfg);c.divisao=+t.value;saveDoc('cfg','casa',c)}
+ if(t.id==='kwh'){const n=parseFloat(String(t.value).replace(/\s|€/g,'').replace(',','.'));if(isFinite(n)&&n>0&&n<5){saveDoc('cfg','energia',{preco:Math.round(n*10000)/10000});toast('Preço guardado')}else if(t.value.trim()===''){saveDoc('cfg','energia',{preco:0})}else toast('Preço inválido. Exemplo: 0,18')}
 });
 document.addEventListener('input',e=>{
  const t=e.target;
@@ -476,6 +519,8 @@ function startData(){
  unsubs.push(onSnapshot(query(collection(fs,'mov'),where('mes','>=',DESDE)),opt,s=>{st.mov=toObj(s);st.pend=s.metadata.hasPendingWrites;ok(s);sched()},err));
  unsubs.push(onSnapshot(collection(fs,'fixos'),opt,s=>{st.fixos=toObj(s);ok(s);sched()},err));
  unsubs.push(onSnapshot(collection(fs,'metas'),opt,s=>{st.metas=toObj(s);ok(s);sched()},err));
+ unsubs.push(onSnapshot(collection(fs,'consumo'),s=>{st.consumo=toObj(s);sched()},()=>{st.consumo={};sched()}));
+ unsubs.push(onSnapshot(doc(fs,'cfg','energia'),d=>{st.energia=d.exists()?d.data():{};sched()},()=>{}));
  unsubs.push(onSnapshot(doc(fs,'cfg','orc'),d=>{st.orc=d.exists()?d.data():{cats:{}};sched()},err));
  unsubs.push(onSnapshot(doc(fs,'cfg','casa'),opt,d=>{st.cfg=d.exists()?d.data():{membros:{},divisao:50};if(!d.metadata.fromCache&&!joined)setTimeout(join,0);sched()},err));
 }
@@ -488,7 +533,7 @@ function init(){
  window.addEventListener('online',net);window.addEventListener('offline',net);
  onAuthStateChanged(auth,u=>{
   unsubs.forEach(f=>f());unsubs=[];joined=false;
-  if(!u){st.me=null;st.email='';st.mov={};st.fixos={};st.metas={};st.cfg={membros:{},divisao:50};st.orc={cats:{}};showLogin(true);return}
+  if(!u){st.me=null;st.email='';st.mov={};st.fixos={};st.metas={};st.cfg={membros:{},divisao:50};st.orc={cats:{}};st.consumo={};st.energia={};showLogin(true);return}
   st.me=u.uid;st.email=(u.email||'').toLowerCase();st.mode=navigator.onLine?'wait':'off';
   showLogin(false);render();startData();
  });

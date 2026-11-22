@@ -7,6 +7,23 @@ service cloud.firestore {
         && request.auth.token.email != null
         && request.auth.token.email.lower() in ['vitordiasleite@gmail.com', 'carinalestre@gmail.com'];
     }
+    // Conta técnica usada pelo PC para enviar as leituras dos ACs.
+    // Só consegue CRIAR documentos em 'consumo' (não lê, não altera, não apaga).
+    // Substituir pelo e-mail real da conta criada em Authentication.
+    function tecnico() {
+      return request.auth != null
+        && request.auth.token.email != null
+        && request.auth.token.email.lower() == 'TECNICO_EMAIL';
+    }
+    match /consumo/{id} {
+      allow read: if membro();
+      allow create: if tecnico()
+        && request.resource.data.keys().hasOnly(['div', 'ts', 'energia_wh', 'power_w', 'estado'])
+        && request.resource.data.div in ['sala', 'quarto']
+        && request.resource.data.ts is string
+        && request.resource.data.energia_wh is number;
+      allow update, delete: if false;
+    }
     match /{col}/{id} {
       allow read, write: if membro() && col in ['mov', 'fixos', 'metas', 'cfg', 'talao'];
     }
