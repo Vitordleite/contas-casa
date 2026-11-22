@@ -1,7 +1,7 @@
 import {initializeApp,getAuth,signInWithEmailAndPassword,onAuthStateChanged,signOut,updatePassword,sendPasswordResetEmail,initializeFirestore,persistentLocalCache,persistentMultipleTabManager,collection,doc,setDoc,getDoc,deleteDoc,onSnapshot,query,where} from './firebase.js';
 import {firebaseConfig} from './config.js';
 import {HIST_ST} from './historico.js';
-const VERSAO='1.3.0';
+const VERSAO='1.3.1';
 const $=s=>document.querySelector(s);
 const eur=new Intl.NumberFormat('pt-PT',{style:'currency',currency:'EUR'});
 const E=v=>eur.format(v||0);
@@ -226,9 +226,8 @@ function vEnergia(){
  h+=`<label><span>Preço da eletricidade (€/kWh)</span><input id="kwh" inputmode="decimal" value="${preco?String(preco).replace('.',','):''}" placeholder="ex.: 0,18"></label>`;
  h+=`<div class="bars" style="margin-top:6px">`+Object.keys(tot).sort().reverse().map(m=>{
   const v=tot[m],t=Object.values(v).reduce((a,b)=>a+b,0);
-  const det=Object.entries(v).map(([a,x])=>(DIVS[a]||a)+' '+kwhF(x)).join(' · ');
-  return`<div class="br"><div class="t"><span>${nomeMes(m)}</span><span>${kwhF(t)}${preco?' · '+E(t*preco):''}</span></div><small>${det}</small></div>`}).join('')+`</div>`;
- h+=`<p class="sm muted" style="margin-top:10px">Agosto a outubro e novembro até dia 22 vêm do histórico da app SmartThings. Daí em diante, a app soma o que o PC lê todos os dias nos contadores dos ACs (sem estimativas nos dias sem leitura).${ultima?' Última leitura do PC: '+new Date(ultima).toLocaleString('pt-PT',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+'.':''}</p></div>`;
+  return`<div class="br"><div class="t"><span>${nomeMes(m)}</span><span>${kwhF(t)}${preco?' · '+E(t*preco):''}</span></div></div>`}).join('')+`</div>`;
+ h+=`<p class="sm muted" style="margin-top:10px">Até 22/11 vem do SmartThings; depois, das leituras diárias do PC.${ultima?' Última leitura: '+new Date(ultima).toLocaleString('pt-PT',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+'.':''}</p></div>`;
  return h;
 }
 function vMais(){
