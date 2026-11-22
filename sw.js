@@ -1,7 +1,7 @@
 // Service worker: guarda a app no telemóvel para abrir sem rede.
 // Ao publicar uma versão nova, muda o número abaixo.
-const VERSAO = 'contas-v1.2.0';
-const BASE = ['./', './index.html', './app.js', './firebase.js', './config.js', './manifest.webmanifest',
+const VERSAO = 'contas-v1.2.1';
+const BASE = ['./', './index.html', './app.js', './firebase.js', './historico.js', './config.js', './manifest.webmanifest',
   './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png'];
 
 self.addEventListener('install', e => {

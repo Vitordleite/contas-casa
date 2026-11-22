@@ -1,6 +1,7 @@
 import {initializeApp,getAuth,signInWithEmailAndPassword,onAuthStateChanged,signOut,updatePassword,sendPasswordResetEmail,initializeFirestore,persistentLocalCache,persistentMultipleTabManager,collection,doc,setDoc,getDoc,deleteDoc,onSnapshot,query,where} from './firebase.js';
 import {firebaseConfig} from './config.js';
-const VERSAO='1.2.0';
+import {HIST_ST} from './historico.js';
+const VERSAO='1.2.1';
 const $=s=>document.querySelector(s);
 const eur=new Intl.NumberFormat('pt-PT',{style:'currency',currency:'EUR'});
 const E=v=>eur.format(v||0);
@@ -233,6 +234,15 @@ function vEnergia(){
  return h;
 }
 
+function vHistST(){
+ const preco=+st.energia.preco>0?+st.energia.preco:0,H=HIST_ST;
+ const c=k=>preco?' · '+E(k*preco):'';
+ const mes=Object.entries(H.meses.sala).map(([m,k])=>`<div class="br"><div class="t"><span>${nomeMes(m)}${m===mesDe(H.atualizado)?' <small class="muted">(até '+H.atualizado.slice(8,10)+'/'+H.atualizado.slice(5,7)+')</small>':''}</span><span>${kwhF(k)}${c(k)}</span></div></div>`).join('');
+ const sem=Object.entries(H.semanas.sala).map(([d,k])=>{const f=new Date(d+'T12:00:00');f.setDate(f.getDate()+6);return`<div class="br"><div class="t"><span>${fmtCurto(d)} a ${fmtCurto(hoje0(f))}</span><span>${kwhF(k)}${c(k)}</span></div></div>`}).join('');
+ const dia=Object.entries(H.dias.sala).sort().reverse().map(([d,k])=>`<div class="br"><div class="t"><span>${fmtCurto(d)}${d===H.atualizado.slice(0,10)?' <small class="muted">(parcial)</small>':''}</span><span>${kwhF(k)}${c(k)}</span></div></div>`).join('');
+ return`<div class="card"><h2>Histórico do SmartThings (sala)</h2><p class="sm muted">Valores copiados da app SmartThings em ${H.atualizado.slice(8,10)}/${H.atualizado.slice(5,7)}. Só sala; o quarto ainda não tem histórico importado.</p><div class="lbl" style="margin-top:10px">Por mês</div><div class="bars">${mes}</div><div class="lbl" style="margin-top:10px">Por semana</div><div class="bars">${sem}</div><div class="lbl" style="margin-top:10px">Por dia</div><div class="bars">${dia}</div></div>`;
+}
+
 function vMais(){
  const ms=memb(),pct=+st.cfg.divisao>=0?+st.cfg.divisao:50;
  const metas=Object.entries(st.metas).sort((a,b)=>String(a[1].prazo||'9').localeCompare(String(b[1].prazo||'9')));
@@ -436,7 +446,7 @@ function render(){
  if(a&&v.contains(a)&&a.tagName==='INPUT'){dirty=true;if(st.tab==='movimentos'&&$('#mov-list'))$('#mov-list').innerHTML=listMov();return}
  if($('#sheet').classList.contains('open'))dirty=true;
  const fn={resumo:vResumo,movimentos:vMov,fixos:vFixos,orcamento:vOrc,mais:vMais}[st.tab]||vResumo;
- v.innerHTML=fn()+(st.tab==='resumo'&&st.me?vEnergia():'');if(st.tab==='movimentos')$('#mov-list').innerHTML=listMov();
+ v.innerHTML=fn()+(st.tab==='resumo'&&st.me?vEnergia()+vHistST():'');if(st.tab==='movimentos')$('#mov-list').innerHTML=listMov();
  roTrend.disconnect();const s=$('#trend');if(s)roTrend.observe(s);
  dirty=false;
 }
