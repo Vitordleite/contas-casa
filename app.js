@@ -1,7 +1,7 @@
 import {initializeApp,getAuth,signInWithEmailAndPassword,onAuthStateChanged,signOut,updatePassword,sendPasswordResetEmail,initializeFirestore,persistentLocalCache,persistentMultipleTabManager,collection,doc,setDoc,getDoc,deleteDoc,onSnapshot,query,where} from './firebase.js';
 import {firebaseConfig} from './config.js';
 import {HIST_ST} from './historico.js';
-const VERSAO='1.2.1';
+const VERSAO='1.2.2';
 const $=s=>document.querySelector(s);
 const eur=new Intl.NumberFormat('pt-PT',{style:'currency',currency:'EUR'});
 const E=v=>eur.format(v||0);
@@ -236,11 +236,16 @@ function vEnergia(){
 
 function vHistST(){
  const preco=+st.energia.preco>0?+st.energia.preco:0,H=HIST_ST;
- const c=k=>preco?' · '+E(k*preco):'';
- const mes=Object.entries(H.meses.sala).map(([m,k])=>`<div class="br"><div class="t"><span>${nomeMes(m)}${m===mesDe(H.atualizado)?' <small class="muted">(até '+H.atualizado.slice(8,10)+'/'+H.atualizado.slice(5,7)+')</small>':''}</span><span>${kwhF(k)}${c(k)}</span></div></div>`).join('');
- const sem=Object.entries(H.semanas.sala).map(([d,k])=>{const f=new Date(d+'T12:00:00');f.setDate(f.getDate()+6);return`<div class="br"><div class="t"><span>${fmtCurto(d)} a ${fmtCurto(hoje0(f))}</span><span>${kwhF(k)}${c(k)}</span></div></div>`}).join('');
- const dia=Object.entries(H.dias.sala).sort().reverse().map(([d,k])=>`<div class="br"><div class="t"><span>${fmtCurto(d)}${d===H.atualizado.slice(0,10)?' <small class="muted">(parcial)</small>':''}</span><span>${kwhF(k)}${c(k)}</span></div></div>`).join('');
- return`<div class="card"><h2>Histórico do SmartThings (sala)</h2><p class="sm muted">Valores copiados da app SmartThings em ${H.atualizado.slice(8,10)}/${H.atualizado.slice(5,7)}. Só sala; o quarto ainda não tem histórico importado.</p><div class="lbl" style="margin-top:10px">Por mês</div><div class="bars">${mes}</div><div class="lbl" style="margin-top:10px">Por semana</div><div class="bars">${sem}</div><div class="lbl" style="margin-top:10px">Por dia</div><div class="bars">${dia}</div></div>`;
+ const parc=H.atualizado.slice(0,10);
+ const linhas=(bloco,rot,ord)=>{
+  const ks=[...new Set(Object.values(bloco).flatMap(o=>Object.keys(o)))].sort();if(ord)ks.reverse();
+  return ks.map(k=>{const v={};let t=0;Object.entries(bloco).forEach(([a,o])=>{if(k in o){v[a]=o[k];t+=o[k]}});
+   const det=Object.entries(v).map(([a,x])=>(DIVS[a]||a)+' '+kwhF(x)).join(' · ');
+   return`<div class="br"><div class="t"><span>${rot(k)}</span><span>${kwhF(t)}${preco?' · '+E(t*preco):''}</span></div><small>${det}</small></div>`}).join('')};
+ const rMes=m=>nomeMes(m)+(m===mesDe(parc)?' <small class="muted">(até '+fmtCurto(parc)+')</small>':'');
+ const rSem=d=>{const f=new Date(d+'T12:00:00');f.setDate(f.getDate()+6);return fmtCurto(d)+' a '+fmtCurto(hoje0(f))};
+ const rDia=d=>fmtCurto(d)+(d===parc?' <small class="muted">(parcial)</small>':'');
+ return`<div class="card"><h2>Histórico do SmartThings</h2><p class="sm muted">Valores copiados da app SmartThings em ${fmtCurto(parc)}, para sala e quarto. É um histórico à parte das leituras automáticas do PC.</p><div class="lbl" style="margin-top:10px">Por mês</div><div class="bars">${linhas(H.meses,rMes,true)}</div><div class="lbl" style="margin-top:10px">Por semana</div><div class="bars">${linhas(H.semanas,rSem,true)}</div><div class="lbl" style="margin-top:10px">Por dia</div><div class="bars">${linhas(H.dias,rDia,true)}</div></div>`;
 }
 
 function vMais(){
