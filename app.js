@@ -1,7 +1,7 @@
 import {initializeApp,getAuth,signInWithEmailAndPassword,onAuthStateChanged,signOut,updatePassword,sendPasswordResetEmail,initializeFirestore,persistentLocalCache,persistentMultipleTabManager,collection,doc,setDoc,getDoc,deleteDoc,onSnapshot,query,where} from './firebase.js';
 import {firebaseConfig} from './config.js';
 import {HIST_ST} from './historico.js';
-const VERSAO='1.2.2';
+const VERSAO='1.3.0';
 const $=s=>document.querySelector(s);
 const eur=new Intl.NumberFormat('pt-PT',{style:'currency',currency:'EUR'});
 const E=v=>eur.format(v||0);
@@ -194,60 +194,43 @@ function vOrc(){
 
 /* ---------- consumo elétrico dos ACs (lido no PC e enviado para 'consumo') ---------- */
 const DIVS={sala:'Sala',quarto:'Quarto'};
-const diaLocal=ts=>hoje0(new Date(ts));
 const hoje0=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
-const kwhF=v=>new Intl.NumberFormat('pt-PT',{minimumFractionDigits:2,maximumFractionDigits:2}).format(v)+' kWh';
+const diaLocal=ts=>hoje0(new Date(ts));
+const kwhF=v=>new Intl.NumberFormat('pt-PT',{minimumFractionDigits:1,maximumFractionDigits:1}).format(v)+' kWh';
 const fmtCurto=d=>d.slice(8)+'/'+d.slice(5,7);
-function intervalosConsumo(){
+/* Total por mês e por AC = histórico do SmartThings + consumo lido pelo PC depois desse histórico.
+   O consumo do PC é a diferença entre leituras consecutivas do contador do AC (sem estimativas). */
+function totaisMes(){
+ const base=new Date(HIST_ST.atualizado).getTime(),tot={};
+ const add=(m,d,k)=>{(tot[m]=tot[m]||{})[d]=((tot[m]||{})[d]||0)+k};
+ Object.entries(HIST_ST.meses).forEach(([d,o])=>Object.entries(o).forEach(([m,k])=>add(m,d,k)));
  const por={};
  Object.values(st.consumo).forEach(r=>{if(r&&r.div&&r.ts&&isFinite(r.energia_wh))(por[r.div]=por[r.div]||[]).push(r)});
- const out=[];
+ let ultima=0;
  Object.entries(por).forEach(([div,rs])=>{
   rs.sort((a,b)=>String(a.ts).localeCompare(String(b.ts)));
-  for(let i=1;i<rs.length;i++){
+  let idx=-1;rs.forEach((r,i)=>{if(new Date(r.ts).getTime()<=base)idx=i});
+  for(let i=Math.max(idx,0)+1;i<rs.length;i++){
    const d=rs[i].energia_wh-rs[i-1].energia_wh;if(!(d>=0))continue; // contador reiniciado: ignora
-   const t0=new Date(rs[i-1].ts),t1=new Date(rs[i].ts);
-   out.push({div,kwh:d/1000,fim:diaLocal(rs[i].ts),ini:diaLocal(rs[i-1].ts),horas:(t1-t0)/36e5});
+   add(diaLocal(rs[i].ts).slice(0,7),div,d/1000);
+   ultima=Math.max(ultima,new Date(rs[i].ts).getTime());
   }
  });
- return out;
+ const ult=Object.values(st.consumo).map(r=>r.ts).filter(Boolean).sort().pop();
+ return{tot,ultima:ult};
 }
 function vEnergia(){
  const preco=+st.energia.preco>0?+st.energia.preco:0;
- const todas=intervalosConsumo(),m=st.mes;
- const iv=todas.filter(x=>mesDe(x.fim)===m);
- const ultima=Object.values(st.consumo).map(r=>r.ts).filter(Boolean).sort().pop();
+ const{tot,ultima}=totaisMes();
  let h=`<div class="card"><h2>Consumo elétrico dos ACs</h2>`;
  h+=`<label><span>Preço da eletricidade (€/kWh)</span><input id="kwh" inputmode="decimal" value="${preco?String(preco).replace('.',','):''}" placeholder="ex.: 0,18"></label>`;
- if(!todas.length){
-  h+=`<p class="sm muted">Ainda não há leituras suficientes. O PC envia uma leitura por dia; a partir da segunda leitura de cada AC aparece aqui o consumo.</p></div>`;return h}
- const dias={};
- iv.forEach(x=>{const d=dias[x.fim]=dias[x.fim]||{kwh:{},ini:x.ini,longo:false};d.kwh[x.div]=(d.kwh[x.div]||0)+x.kwh;if(x.ini<x.fim&&x.horas>36){d.longo=true;if(x.ini<d.ini||d.ini===x.fim)d.ini=x.ini}});
- const tot={};let totAll=0;iv.forEach(x=>{tot[x.div]=(tot[x.div]||0)+x.kwh;totAll+=x.kwh});
- h+=`<div class="grid2" style="margin:10px 0"><div class="tile"><small>${nomeMes(m)}</small><b>${kwhF(totAll)}</b><em>${Object.entries(tot).map(([k,v])=>(DIVS[k]||k)+' '+kwhF(v)).join(' · ')||'sem leituras neste mês'}</em></div><div class="tile"><small>Custo</small><b>${preco?E(totAll*preco):'—'}</b><em>${preco?'a '+String(preco).replace('.',',')+' €/kWh':'indica o preço acima'}</em></div></div>`;
- const ks=Object.keys(dias).sort().reverse();
- h+=ks.length?`<div class="bars">`+ks.map(k=>{const d=dias[k],t=Object.values(d.kwh).reduce((a,b)=>a+b,0);
-  const lab=d.longo?`${fmtCurto(d.ini)} → ${fmtCurto(k)}`:fmtCurto(k);
-  const det=Object.entries(d.kwh).map(([a,v])=>(DIVS[a]||a)+' '+kwhF(v)).join(' · ');
-  return`<div class="br"><div class="t"><span>${lab}${d.longo?' <small class="muted">(vários dias sem leitura)</small>':''}</span><span>${kwhF(t)}${preco?' · '+E(t*preco):''}</span></div><small>${det}</small></div>`}).join('')+`</div>`:'<p class="sm muted">Sem leituras neste mês.</p>';
- h+=`<p class="sm muted" style="margin-top:10px">Cada linha é o consumo entre duas leituras do contador do AC, atribuído ao dia da leitura mais recente. Dias sem leitura não são estimados: quando o PC volta a ler, o consumo desse período aparece numa única linha.${ultima?' Última leitura: '+new Date(ultima).toLocaleString('pt-PT',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+'.':''}</p></div>`;
+ h+=`<div class="bars" style="margin-top:6px">`+Object.keys(tot).sort().reverse().map(m=>{
+  const v=tot[m],t=Object.values(v).reduce((a,b)=>a+b,0);
+  const det=Object.entries(v).map(([a,x])=>(DIVS[a]||a)+' '+kwhF(x)).join(' · ');
+  return`<div class="br"><div class="t"><span>${nomeMes(m)}</span><span>${kwhF(t)}${preco?' · '+E(t*preco):''}</span></div><small>${det}</small></div>`}).join('')+`</div>`;
+ h+=`<p class="sm muted" style="margin-top:10px">Agosto a outubro e novembro até dia 22 vêm do histórico da app SmartThings. Daí em diante, a app soma o que o PC lê todos os dias nos contadores dos ACs (sem estimativas nos dias sem leitura).${ultima?' Última leitura do PC: '+new Date(ultima).toLocaleString('pt-PT',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+'.':''}</p></div>`;
  return h;
 }
-
-function vHistST(){
- const preco=+st.energia.preco>0?+st.energia.preco:0,H=HIST_ST;
- const parc=H.atualizado.slice(0,10);
- const linhas=(bloco,rot,ord)=>{
-  const ks=[...new Set(Object.values(bloco).flatMap(o=>Object.keys(o)))].sort();if(ord)ks.reverse();
-  return ks.map(k=>{const v={};let t=0;Object.entries(bloco).forEach(([a,o])=>{if(k in o){v[a]=o[k];t+=o[k]}});
-   const det=Object.entries(v).map(([a,x])=>(DIVS[a]||a)+' '+kwhF(x)).join(' · ');
-   return`<div class="br"><div class="t"><span>${rot(k)}</span><span>${kwhF(t)}${preco?' · '+E(t*preco):''}</span></div><small>${det}</small></div>`}).join('')};
- const rMes=m=>nomeMes(m)+(m===mesDe(parc)?' <small class="muted">(até '+fmtCurto(parc)+')</small>':'');
- const rSem=d=>{const f=new Date(d+'T12:00:00');f.setDate(f.getDate()+6);return fmtCurto(d)+' a '+fmtCurto(hoje0(f))};
- const rDia=d=>fmtCurto(d)+(d===parc?' <small class="muted">(parcial)</small>':'');
- return`<div class="card"><h2>Histórico do SmartThings</h2><p class="sm muted">Valores copiados da app SmartThings em ${fmtCurto(parc)}, para sala e quarto. É um histórico à parte das leituras automáticas do PC.</p><div class="lbl" style="margin-top:10px">Por mês</div><div class="bars">${linhas(H.meses,rMes,true)}</div><div class="lbl" style="margin-top:10px">Por semana</div><div class="bars">${linhas(H.semanas,rSem,true)}</div><div class="lbl" style="margin-top:10px">Por dia</div><div class="bars">${linhas(H.dias,rDia,true)}</div></div>`;
-}
-
 function vMais(){
  const ms=memb(),pct=+st.cfg.divisao>=0?+st.cfg.divisao:50;
  const metas=Object.entries(st.metas).sort((a,b)=>String(a[1].prazo||'9').localeCompare(String(b[1].prazo||'9')));
@@ -451,7 +434,7 @@ function render(){
  if(a&&v.contains(a)&&a.tagName==='INPUT'){dirty=true;if(st.tab==='movimentos'&&$('#mov-list'))$('#mov-list').innerHTML=listMov();return}
  if($('#sheet').classList.contains('open'))dirty=true;
  const fn={resumo:vResumo,movimentos:vMov,fixos:vFixos,orcamento:vOrc,mais:vMais}[st.tab]||vResumo;
- v.innerHTML=fn()+(st.tab==='resumo'&&st.me?vEnergia()+vHistST():'');if(st.tab==='movimentos')$('#mov-list').innerHTML=listMov();
+ v.innerHTML=fn()+(st.tab==='resumo'&&st.me?vEnergia():'');if(st.tab==='movimentos')$('#mov-list').innerHTML=listMov();
  roTrend.disconnect();const s=$('#trend');if(s)roTrend.observe(s);
  dirty=false;
 }

@@ -1,21 +1,10 @@
-// Histórico copiado à mão da app SmartThings (Monitorização energética), em kWh.
-// Fica separado das leituras automáticas do PC (que são calculadas pela app).
-// Para acrescentar mais dados, basta juntar linhas nos blocos abaixo.
+// Histórico mensal copiado à mão da app SmartThings (Monitorização energética), em kWh.
+// A app soma a isto o que o PC lê a partir de 'atualizado' (novembro é parcial: dia 1 até esta data).
+// Para acrescentar meses, juntar linhas abaixo.
 export const HIST_ST = {
-  atualizado: '2026-11-22 11:02',
-  // kWh por mês (novembro é parcial: do dia 1 até à data acima)
+  atualizado: '2026-11-22T11:02:00Z',
   meses: {
     sala: { '2026-08': 4.0, '2026-09': 11.4, '2026-10': 3.6, '2026-11': 26.5 },
     quarto: { '2026-08': 2.7, '2026-09': 2.8, '2026-10': 3.2, '2026-11': 8.3 },
-  },
-  // kWh por semana (chave = primeiro dia da semana)
-  semanas: {
-    sala: { '2026-11-01': 3.8, '2026-11-08': 8.9, '2026-11-15': 12.7, '2026-11-22': 1.0 },
-    quarto: { '2026-11-01': 2.0, '2026-11-08': 4.0, '2026-11-15': 2.3, '2026-11-22': 0.0 },
-  },
-  // kWh por dia (22/11 é parcial)
-  dias: {
-    sala: { '2026-11-19': 1.9, '2026-11-20': 2.6, '2026-11-21': 4.9, '2026-11-22': 1.0 },
-    quarto: { '2026-11-19': 0.9, '2026-11-20': 0.3, '2026-11-21': 0.3, '2026-11-22': 0.0 },
   },
 };
